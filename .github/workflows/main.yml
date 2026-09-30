@@ -6,310 +6,48 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      - name: Configure Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "/usr/local/lib/android/sdk/platform-tools" >> $GITHUB_PATH
+          echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "/usr/local/lib/android/sdk/emulator" >> $GITHUB_PATH
 
-      - name: Check index.html
+      - name: Accept Android licenses
         run: |
-          if [ ! -f "index.html" ]; then
-            echo "ERROR: index.html not found in repository root."
-            exit 1
-          fi
-          echo "index.html found."
+          yes | sdkmanager --licenses || true
 
-      - name: Create Android project
+      - name: Install Android packages
         run: |
-          mkdir -p app/src/main/java/com/shailubhai/apk
-          mkdir -p app/src/main/assets
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
 
-          cp index.html app/src/main/assets/index.html
-
-          cat > settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "ShailuBhaiAPK"
-          include(":app")
-          EOF
-
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.6.1' apply false
-          }
-          EOF
-
-          cat > gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          android.nonTransitiveRClass=true
-          EOF
-
-          cat > app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
-          android {
-              namespace 'com.shailubhai.apk'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.shailubhai.apk'
-                  minSdk 23
-                  targetSdk 35
-                  versionCode 1
-                  versionName '1.0'
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      shrinkResources false
-                  }
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.7.0'
-              implementation 'androidx.activity:activity:1.9.3'
-          }
-          EOF
-
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <uses-permission android:name="android.permission.INTERNET" />
-
-              <application
-                  android:allowBackup="true"
-                  android:label="Shailu Bhai"
-                  android:supportsRtl="true"
-                  android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="true">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-
-                  </activity>
-
-              </application>
-          </manifest>
-          EOF
-
-          mkdir -p app/src/main/res/values
-
-          cat > app/src/main/res/values/styles.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#075E54</item>
-                  <item name="android:navigationBarColor">#000000</item>
-                  <item name="android:statusBarColor">#075E54</item>
-                  <item name="android:windowLightStatusBar">false</item>
-              </style>
-          </resources>
-          EOF
-
-          cat > app/src/main/java/com/shailubhai/apk/MainActivity.kt <<'EOF'
-          package com.shailubhai.apk
-
-          import android.content.ActivityNotFoundException
-          import android.content.Intent
-          import android.net.Uri
-          import android.os.Bundle
-          import android.webkit.WebResourceRequest
-          import android.webkit.WebView
-          import android.webkit.WebViewClient
-          import androidx.appcompat.app.AppCompatActivity
-
-          class MainActivity : AppCompatActivity() {
-
-              private lateinit var webView: WebView
-
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-
-                  webView = WebView(this)
-
-                  webView.settings.javaScriptEnabled = true
-                  webView.settings.domStorageEnabled = true
-                  webView.settings.databaseEnabled = true
-                  webView.settings.allowFileAccess = true
-                  webView.settings.allowContentAccess = true
-                  webView.settings.mediaPlaybackRequiresUserGesture = false
-
-                  webView.webViewClient = object : WebViewClient() {
-
-                      override fun shouldOverrideUrlLoading(
-                          view: WebView,
-                          request: WebResourceRequest
-                      ): Boolean {
-                          return handleUrl(request.url.toString())
-                      }
-
-                      @Deprecated("Deprecated in Java")
-                      override fun shouldOverrideUrlLoading(
-                          view: WebView,
-                          url: String
-                      ): Boolean {
-                          return handleUrl(url)
-                      }
-                  }
-
-                  setContentView(webView)
-                  webView.loadUrl("file:///android_asset/index.html")
-              }
-
-              private fun handleUrl(url: String): Boolean {
-
-                  val lower = url.lowercase()
-
-                  if (
-                      lower.startsWith("whatsapp://") ||
-                      lower.startsWith("intent://") ||
-                      lower.contains("wa.me/") ||
-                      lower.contains("api.whatsapp.com/send") ||
-                      lower.contains("web.whatsapp.com/send")
-                  ) {
-                      try {
-                          val uri = Uri.parse(url)
-
-                          var phone = uri.getQueryParameter("phone")
-                          var text = uri.getQueryParameter("text")
-
-                          if (phone.isNullOrBlank() && lower.contains("wa.me/")) {
-                              val clean = url.substringAfter("wa.me/")
-                                  .substringBefore("?")
-                                  .substringBefore("#")
-                              phone = clean
-                          }
-
-                          if (!phone.isNullOrBlank()) {
-                              phone = phone.replace(Regex("[^0-9+]"), "")
-
-                              val whatsappUri = Uri.parse(
-                                  "whatsapp://send?phone=${Uri.encode(phone)}" +
-                                  if (!text.isNullOrBlank()) {
-                                      "&text=${Uri.encode(text)}"
-                                  } else {
-                                      ""
-                                  }
-                              )
-
-                              val intent = Intent(Intent.ACTION_VIEW, whatsappUri)
-
-                              try {
-                                  intent.setPackage("com.whatsapp")
-                                  startActivity(intent)
-                              } catch (e: ActivityNotFoundException) {
-                                  intent.setPackage(null)
-                                  startActivity(intent)
-                              }
-
-                              return true
-                          }
-
-                          val intent = Intent(Intent.ACTION_VIEW, uri)
-                          startActivity(intent)
-                          return true
-
-                      } catch (e: Exception) {
-                          return true
-                      }
-                  }
-
-                  if (
-                      lower.startsWith("tel:") ||
-                      lower.startsWith("mailto:") ||
-                      lower.startsWith("geo:")
-                  ) {
-                      try {
-                          startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                      } catch (_: Exception) {
-                      }
-                      return true
-                  }
-
-                  return false
-              }
-
-              override fun onBackPressed() {
-                  if (webView.canGoBack()) {
-                      webView.goBack()
-                  } else {
-                      super.onBackPressed()
-                  }
-              }
-
-              override fun onDestroy() {
-                  webView.destroy()
-                  super.onDestroy()
-              }
-          }
-          EOF
-
-      - name: Create Gradle wrapper
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q gradle-8.7-bin.zip
-          ./gradle-8.7/bin/gradle wrapper --gradle-version 8.7
-
-      - name: Build Debug APK
+      - name: Make Gradle executable
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace
+
+      - name: Build APK
+        run: |
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Shailu-Bhai-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          path: |
+            **/build/outputs/apk/debug/*.apk
